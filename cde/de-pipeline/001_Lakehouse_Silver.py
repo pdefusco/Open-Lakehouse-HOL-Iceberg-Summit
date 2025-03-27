@@ -55,6 +55,13 @@ print("PySpark Runtime Arg: ", sys.argv[1])
 #               LOAD TABLES FROM BRONZE LAYER
 #---------------------------------------------------
 
+
+spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.airlines_silver".format(username))
+spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.airports_silver".format(username))
+spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.flights_silver".format(username))
+spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.planes_silver".format(username))
+
+
 airlinesDf = spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.airlines".format(username))
 
 airportsDf = spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.airports".format(username))
@@ -102,16 +109,25 @@ spark.sql("""CREATE TABLE SPARK_CATALOG.{0}_airlines.flights_silver
 #---------------------------------------------------
 
 # CREATE TABLE BRANCH AND ADD DATA IN IT
-spark.sql("ALTER TABLE SPARK_CATALOG.{0}_airlines.flights_silver CREATE BRANCH ingestion_branch".format(username))
+spark.sql("""ALTER TABLE SPARK_CATALOG.{0}_airlines.flights_silver
+            CREATE BRANCH ingestion_branch""".format(username))
 
-batchDf = spark.sql("SELECT * FROM SPARK_CATALOG.airlines_csv.flights WHERE year = 2025 AND month = 1")
+batchDf = spark.sql("""SELECT *
+                        FROM SPARK_CATALOG.airlines_csv.flights
+                        WHERE year = 2008
+                        AND month = 1""")
 
 #trxBatchDf.write.format("iceberg").option("branch", "ingestion_branch").mode("append").save("SPARK_CATALOG.HOL_DB_{0}.HIST_TRX_{0}".format(username))
 
-batchDf.writeTo("SPARK_CATALOG.{}_airlines.planes_silver.ingestion_branch".format(username))\
-    .using("iceberg") \
-    .append()
+#batchDf.writeTo("SPARK_CATALOG.{}_airlines.flights_silver.ingestion_branch".format(username))\
+#    .using("iceberg") \
+#    .append()
 
+batchDf.write\
+        .format("iceberg")\
+        .option("branch", "ingestion_branch")\
+        .mode("append")\
+        .save("SPARK_CATALOG.{}_airlines.flights_silver".format(username))
 #---------------------------------------------------
 #               VALIDATE BATCH DATA IN BRANCH
 #---------------------------------------------------
