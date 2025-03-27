@@ -69,8 +69,9 @@ planesDf = spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.planes".format(use
 
 # Airlines Table - Create empty table and populate it
 spark.sql("""CREATE TABLE SPARK_CATALOG.{}_airlines.airlines_silver
-                CODE STRING,
-                DESCRIPTION STRING""".format(username))
+                (CODE STRING,
+                DESCRIPTION STRING)
+                USING ICEBERG""".format(username))
 
 airlinesDf\
     .writeTo("SPARK_CATALOG.{}_airlines.airlines_silver".format(username))\
