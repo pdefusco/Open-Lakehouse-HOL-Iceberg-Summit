@@ -55,19 +55,14 @@ print("PySpark Runtime Arg: ", sys.argv[1])
 #               LOAD TABLES FROM BRONZE LAYER
 #---------------------------------------------------
 
-
-spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.airlines_silver".format(username))
-spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.airports_silver".format(username))
-spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.flights_silver".format(username))
-spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.planes_silver".format(username))
-
+spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.airlines_silver PURGE".format(username))
+spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.airports_silver PURGE".format(username))
+spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.flights_silver PURGE".format(username))
+spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.planes_silver PURGE".format(username))
 
 airlinesDf = spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.airlines".format(username))
-
 airportsDf = spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.airports".format(username))
-
 flightsDf = spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.flights".format(username))
-
 planesDf = spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.planes".format(username))
 
 #---------------------------------------------------
@@ -78,7 +73,8 @@ planesDf = spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.planes".format(use
 spark.sql("""CREATE TABLE SPARK_CATALOG.{}_airlines.airlines_silver
                 (CODE STRING,
                 DESCRIPTION STRING)
-                USING ICEBERG""".format(username))
+                USING ICEBERG
+                PARTITIONED BY (bucket(10, CODE))""".format(username))
 
 airlinesDf\
     .writeTo("SPARK_CATALOG.{}_airlines.airlines_silver".format(username))\
@@ -102,7 +98,8 @@ planesDf.writeTo("SPARK_CATALOG.{}_airlines.planes_silver".format(username))\
 spark.sql("""CREATE TABLE SPARK_CATALOG.{0}_airlines.flights_silver
                 USING iceberg
                 AS SELECT *
-                FROM SPARK_CATALOG.{0}_airlines.flights""".format(username))
+                FROM SPARK_CATALOG.{0}_airlines.flights
+                WHERE YEAR = 2024 AND month = 12 AND dayofmonth = 1""".format(username))
 
 #---------------------------------------------------
 #               CREATE WAP BRANCH
@@ -113,27 +110,22 @@ spark.sql("""ALTER TABLE SPARK_CATALOG.{0}_airlines.flights_silver
             CREATE BRANCH ingestion_branch""".format(username))
 
 batchDf = spark.sql("""SELECT *
-                        FROM SPARK_CATALOG.airlines_csv.flights
-                        WHERE year = 2008
-                        AND month = 1""")
-
-#trxBatchDf.write.format("iceberg").option("branch", "ingestion_branch").mode("append").save("SPARK_CATALOG.HOL_DB_{0}.HIST_TRX_{0}".format(username))
-
-#batchDf.writeTo("SPARK_CATALOG.{}_airlines.flights_silver.ingestion_branch".format(username))\
-#    .using("iceberg") \
-#    .append()
+                        FROM SPARK_CATALOG.{0}_airlines.flights
+                        WHERE year = 2024
+                        AND month = 12
+                        AND dayofmonth = 1""".format(username))
 
 batchDf.write\
         .format("iceberg")\
         .option("branch", "ingestion_branch")\
         .mode("append")\
         .save("SPARK_CATALOG.{}_airlines.flights_silver".format(username))
+
 #---------------------------------------------------
 #               VALIDATE BATCH DATA IN BRANCH
 #---------------------------------------------------
 
 # validate the data quality of the sales data with great-expectations
-
 geTrxBatchDf = SparkDFDataset(batchDf)
 
 geTrxBatchDfValidation = geTrxBatchDf.expect_column_max_to_be_between(column="month", min_value=1, max_value=12)
@@ -142,36 +134,18 @@ print(f"VALIDATION RESULTS FOR BATCH DATA:\n{geTrxBatchDfValidation}\n")
 assert geTrxBatchDfValidation.success, \
     "VALIDATION FOR TABLE UNSUCCESSFUL: COLUMN VALUES OUT OF RANGE."
 
-### TRANSACTIONS FACT TABLE
-branchDf = spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.planes_silver VERSION AS OF 'ingestion_branch';".format(username))
-
 ### TRX DF SCHEMA BEFORE CASTING
-branchDf.printSchema()
+batchDf.printSchema()
 
 print("COUNT OF NEW BATCH OF TRANSACTIONS")
-print(branchDf.count())
-
-#---------------------------------------------------
-#               VALIDATE BATCH DATA IN BRANCH
-#---------------------------------------------------
-
-# validate the data quality of the sales data with great-expectations
-
-geTrxBatchDf = SparkDFDataset(branchDf)
-
-geTrxBatchDfValidation = geTrxBatchDf.expect_column_max_to_be_between(column="latitude", min_value=23, max_value=50)
-
-print(f"VALIDATION RESULTS FOR TRANSACTION BATCH DATA:\n{geTrxBatchDfValidation}\n")
-assert geTrxBatchDfValidation.success, \
-    "VALIDATION FOR SALES TABLE UNSUCCESSFUL: FOUND DUPLICATES IN COLUMNS LIST."
-
+print(batchDf.count())
 
 #---------------------------------------------------
 #               MERGE TRANSACTIONS WITH HIST
 #---------------------------------------------------
 
 ### PRE-MERGE COUNTS BY TRANSACTION TYPE:
-spark.sql("""SELECT COUNT(*) FROM SPARK_CATALOG.{}_airlines.planes_silver""".format(username)).show()
+spark.sql("""SELECT COUNT(*) FROM SPARK_CATALOG.{}_airlines.flights_silver""".format(username)).show()
 
 ### APPEND OPERATION
 #branchDf.write.format("iceberg").mode("append").save("SPARK_CATALOG.HOL_DB_{0}.HIST_TRX_{0}".format(username))
@@ -188,14 +162,14 @@ spark.sql("""SELECT COUNT(*) FROM SPARK_CATALOG.{}_airlines.planes_silver""".for
 #we will use the cherrypick operation to commit the changes to the table which were staged in the 'ing_branch' branch up until now.
 
 # SHOW PAST BRANCH SNAPSHOT ID'S
-spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.planes_silver.refs;".format(username)).show()
+spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.flights_silver.refs;".format(username)).show()
 
 # SAVE THE SNAPSHOT ID CORRESPONDING TO THE CREATED BRANCH
-branchSnapshotId = spark.sql("SELECT snapshot_id FROM SPARK_CATALOG.{}_airlines.planes_silver.refs WHERE NAME == 'ingestion_branch';".format(username)).collect()[0][0]
+branchSnapshotId = spark.sql("SELECT snapshot_id FROM SPARK_CATALOG.{}_airlines.flights_silver.refs WHERE NAME == 'ingestion_branch';".format(username)).collect()[0][0]
 
 # USE THE PROCEDURE TO CHERRY-PICK THE SNAPSHOT
 # THIS IMPLICITLY SETS THE CURRENT TABLE STATE TO THE STATE DEFINED BY THE CHOSEN PRIOR SNAPSHOT ID
-spark.sql("CALL spark_catalog.system.cherrypick_snapshot('SPARK_CATALOG.{}_airlines.planes_silver',{1})".format(username, branchSnapshotId))
+spark.sql("CALL spark_catalog.system.cherrypick_snapshot('SPARK_CATALOG.{0}_airlines.flights_silver',{1})".format(username, branchSnapshotId))
 
 # DROP BRANCH
 #try:
@@ -203,4 +177,4 @@ spark.sql("CALL spark_catalog.system.cherrypick_snapshot('SPARK_CATALOG.{}_airli
 
 # VALIDATE THE CHANGES
 # THE TABLE ROW COUNT IN THE CURRENT TABLE STATE REFLECTS THE APPEND OPERATION - IT PREVIOSULY ONLY DID BY SELECTING THE BRANCH
-spark.sql("SELECT COUNT(*) FROM SPARK_CATALOG.{}_airlines.planes_silver;".format(username)).show()
+spark.sql("SELECT COUNT(*) FROM SPARK_CATALOG.{}_airlines.flights_silver;".format(username)).show()

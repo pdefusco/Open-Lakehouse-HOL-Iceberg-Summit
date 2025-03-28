@@ -41,7 +41,6 @@ from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 from pyspark.sql.types import *
 import sys, random, os, json, random
-from utils import *
 
 spark = SparkSession \
     .builder \
@@ -51,19 +50,18 @@ spark = SparkSession \
 username = sys.argv[1]
 print("PySpark Runtime Arg: ", sys.argv[1])
 
-
 #---------------------------------------------------
 #               ICEBERG INCREMENTAL READ
 #---------------------------------------------------
 
 # ICEBERG TABLE HISTORY (SHOWS EACH SNAPSHOT AND TIMESTAMP)
-spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.planes_silver.history".format(username)).show()
+spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.flights_silver.history".format(username)).show()
 
 # ICEBERG TABLE SNAPSHOTS (USEFUL FOR INCREMENTAL QUERIES AND TIME TRAVEL)
-spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.planes_silver.snapshots".format(username)).show()
+spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.flights_silver.snapshots".format(username)).show()
 
 # STORE FIRST AND LAST SNAPSHOT ID'S FROM SNAPSHOTS TABLE
-snapshots_df = spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.planes_silver.snapshots;".format(username))
+snapshots_df = spark.sql("SELECT * FROM SPARK_CATALOG.{}_airlines.flights_silver.snapshots;".format(username))
 
 # SNAPSHOTS
 snapshots_df.show()
@@ -76,7 +74,7 @@ incReadDf = spark.read\
     .format("iceberg")\
     .option("start-snapshot-id", first_snapshot)\
     .option("end-snapshot-id", last_snapshot)\
-    .load("SPARK_CATALOG.{}_airlines.planes_silver.".format(username))
+    .load("SPARK_CATALOG.{}_airlines.flights_silver".format(username))
 
 print("Incremental Report:")
 incReadDf.show()
@@ -98,7 +96,7 @@ spark.sql("""CREATE TABLE SPARK_CATALOG.{0}_airlines.flights_diverted_gold
                 USING iceberg
                 AS SELECT *
                 FROM SPARK_CATALOG.{0}_airlines.flights F
-                WHERE F.diverted == "true"
+                WHERE F.diverted == 1
                 """.format(username))
 
 spark.stop()

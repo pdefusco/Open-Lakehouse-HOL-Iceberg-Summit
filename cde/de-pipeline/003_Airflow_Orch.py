@@ -46,12 +46,9 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.models.param import Param
 import pendulum
-import logging
-
 
 username = "user001" # Enter your username here
 dag_name = "airlines-"+username
-logger = logging.getLogger(__name__)
 
 print("Using DAG Name: {}".format(dag_name))
 
@@ -93,4 +90,4 @@ end = DummyOperator(
         dag=dag
 )
 
-start >> silver >> gold >> github_list_repos >> end
+start >> silver >> gold >> end
