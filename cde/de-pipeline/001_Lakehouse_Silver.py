@@ -147,6 +147,8 @@ print(batchDf.count())
 
 ## Show nulls in branch using util functions
 null_counts_df = count_nulls(df)
+
+print("COUNT OF ROWS WHERE ANYONE OF THE VALUES ARE NULL")
 null_counts_df.show()
 
 #---------------------------------------------------
