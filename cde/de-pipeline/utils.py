@@ -40,6 +40,7 @@
 import pyspark.sql.functions as F
 from pyspark.sql.types import *
 
+
 # Takes in a StructType schema object and return a column selector that flattens the Struct
 def flatten_struct(schema, prefix=""):
     result = []
@@ -62,3 +63,17 @@ def castMultipleColumns(df, cols):
   for col_name in cols:
     df = df.withColumn(col_name, F.col(col_name).cast('float'))
   return df
+
+
+def count_nulls(df):
+    """
+    Counts null values in each column of a PySpark DataFrame.
+
+    Args:
+        df: The input PySpark DataFrame.
+
+    Returns:
+        A PySpark DataFrame containing the null counts for each column.
+    """
+    null_counts = df.select([F.sum(F.col(c).isNull().cast("int")).alias(c) for c in df.columns])
+    return null_counts

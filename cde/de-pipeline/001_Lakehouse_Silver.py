@@ -42,6 +42,7 @@ import pyspark.sql.functions as F
 from pyspark.sql.types import *
 import sys, random, os, random
 from great_expectations.dataset.sparkdf_dataset import SparkDFDataset
+from utils import count_nulls
 
 spark = SparkSession \
     .builder \
@@ -139,6 +140,14 @@ batchDf.printSchema()
 
 print("COUNT OF NEW BATCH OF TRANSACTIONS")
 print(batchDf.count())
+
+#---------------------------------------------------
+#               SHOW NULLS IN BRANCH
+#---------------------------------------------------
+
+## Show nulls in branch using util functions
+null_counts_df = count_nulls(df)
+null_counts_df.show()
 
 #---------------------------------------------------
 #               MERGE TRANSACTIONS WITH HIST
