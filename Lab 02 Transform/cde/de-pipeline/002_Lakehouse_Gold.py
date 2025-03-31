@@ -83,6 +83,9 @@ incReadDf.show()
 #               BUILD GOLD LAYER TABLES
 #-----------------------------------------------------
 
+spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.flights_planes_reduced_gold PURGE".format(username))
+spark.sql("DROP TABLE IF EXISTS SPARK_CATALOG.{}_airlines.flights_diverted_gold PURGE".format(username))
+
 # Flights Table - Create Table Selecting from Table
 spark.sql("""CREATE TABLE SPARK_CATALOG.{0}_airlines.flights_planes_reduced_gold
                 USING iceberg
