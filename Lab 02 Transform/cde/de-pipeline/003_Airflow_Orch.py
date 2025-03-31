@@ -1,5 +1,5 @@
 #****************************************************************************
-# (C) Cloudera, Inc. 2020-2023
+# (C) Cloudera, Inc. 2020-2022
 #  All rights reserved.
 #
 #  Applicable Open Source License: GNU Affero General Public License v3.0
@@ -34,46 +34,60 @@
 #  BUSINESS ADVANTAGE OR UNAVAILABILITY, OR LOSS OR CORRUPTION OF
 #  DATA.
 #
-# #  Author(s): Paul de Fusco, Jon Ingalls
+# #  Author(s): Paul de Fusco
 #***************************************************************************/
 
-import pyspark.sql.functions as F
-from pyspark.sql.types import *
+# Airflow DAG
+from datetime import datetime, timedelta, timezone
+from dateutil import parser
+from airflow import DAG
+from cloudera.cdp.airflow.operators.cde_operator import CDEJobRunOperator
+from airflow.operators.python import PythonOperator
+from airflow.operators.dummy_operator import DummyOperator
+from airflow.models.param import Param
+import pendulum
 
+username = "user001" # Enter your username here
+dag_name = "airlines-"+username
 
-# Takes in a StructType schema object and return a column selector that flattens the Struct
-def flatten_struct(schema, prefix=""):
-    result = []
-    for elem in schema:
-        if isinstance(elem.dataType, StructType):
-            result += flatten_struct(elem.dataType, prefix + elem.name + ".")
-        else:
-            result.append(F.col(prefix + elem.name).alias(prefix + elem.name))
-    return result
+print("Using DAG Name: {}".format(dag_name))
 
+default_args = {
+    'owner': username,
+    'depends_on_past': False,
+    'start_date': datetime(2024, 5, 21)
+}
 
-def renameMultipleColumns(df, cols, new_cols):
-  res = {cols[i]: new_cols[i] for i in range(len(cols))}
-  for key, value in res.items():
-    df = df.withColumnRenamed(key,value)
-  return df
+dag = DAG(
+        dag_name,
+        default_args=default_args,
+        catchup=False,
+        schedule_interval='@once',
+        is_paused_upon_creation=False
+        )
 
+start = DummyOperator(
+        task_id="start",
+        dag=dag
+)
 
-def castMultipleColumns(df, cols):
-  for col_name in cols:
-    df = df.withColumn(col_name, F.col(col_name).cast('float'))
-  return df
+silver = CDEJobRunOperator(
+        task_id='silver-layer',
+        dag=dag,
+        job_name='cde_silver_' + username, #Must match name of CDE Spark Job in the CDE Jobs UI
+        trigger_rule='all_success',
+        )
 
+gold = CDEJobRunOperator(
+        task_id='gold-layer',
+        dag=dag,
+        job_name='cde_gold_' + username, #Must match name of CDE Spark Job in the CDE Jobs UI
+        trigger_rule='all_success',
+        )
 
-def count_nulls(df):
-    """
-    Counts null values in each column of a PySpark DataFrame.
+end = DummyOperator(
+        task_id="end",
+        dag=dag
+)
 
-    Args:
-        df: The input PySpark DataFrame.
-
-    Returns:
-        A PySpark DataFrame containing the null counts for each column.
-    """
-    null_counts = df.select([F.sum(F.col(c).isNull().cast("int")).alias(c) for c in df.columns])
-    return null_counts
+start >> silver >> gold >> end
