@@ -114,7 +114,7 @@ batchDf = spark.sql("""SELECT *
                         FROM SPARK_CATALOG.{0}_airlines.flights
                         WHERE year = 2024
                         AND month = 12
-                        AND dayofmonth = 1""".format(username))
+                        AND dayofmonth = 2""".format(username))
 
 batchDf.write\
         .format("iceberg")\
@@ -155,7 +155,8 @@ null_counts_df.show()
 #               MERGE TRANSACTIONS WITH HIST
 #---------------------------------------------------
 
-### PRE-MERGE COUNTS BY TRANSACTION TYPE:
+### PRE-MERGE COUNTS:
+print("Pre-Merge Count")
 spark.sql("""SELECT COUNT(*) FROM SPARK_CATALOG.{}_airlines.flights_silver""".format(username)).show()
 
 ### APPEND OPERATION
@@ -188,4 +189,5 @@ spark.sql("CALL spark_catalog.system.cherrypick_snapshot('SPARK_CATALOG.{0}_airl
 
 # VALIDATE THE CHANGES
 # THE TABLE ROW COUNT IN THE CURRENT TABLE STATE REFLECTS THE APPEND OPERATION - IT PREVIOSULY ONLY DID BY SELECTING THE BRANCH
+print("Post-Merge Count")
 spark.sql("SELECT COUNT(*) FROM SPARK_CATALOG.{}_airlines.flights_silver;".format(username)).show()
