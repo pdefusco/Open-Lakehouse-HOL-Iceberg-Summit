@@ -50,7 +50,7 @@ client = cmlapi.default_client()
 client.list_projects()
 
 projectId = os.environ['CDSW_PROJECT_ID']
-username = os.environ["PROJECT_OWNER"]
+username = "<user-id>""
 experimentName = "xgb-cc-fraud-{0}".format(username)
 
 experimentId = mlflow.get_experiment_by_name(experimentName).experiment_id
