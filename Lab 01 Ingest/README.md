@@ -1,89 +1,116 @@
-# Module 13 - Data Ingestion and Change Data Capture (CDC)
+# LAB 01: Ingest data using Apache NiFi
 
 ## Overview
 
-This module focuses on **Data Ingestion** and **Change Data Capture (CDC)** techniques for managing data in Iceberg tables on the Cloudera Data Platform (CDP). It covers using NiFi, Debezium, GoldenGate, and custom flows for ingesting data and simulating CDC transactions in a variety of scenarios.
+In this lab, we will explore using **NiFi** to ingest new data into Iceberg tables. This process can take advantage of the ACID capabilities Iceberg provides, whether it is inserting new data into Iceberg tables or CDC transactions to provid real-time updates without rewriting entire datasets.
 
-### Key Concepts of Data Ingestion and Why CDC is Important
+## Step-by-Step Guide
 
-1. **Data Ingestion**  
-   - Ingesting data from external sources into Iceberg tables, ensuring that it is properly formatted and stored for further analytics.
+### Step 1: Setup
 
-2. **Change Data Capture (CDC)**  
-   - Capturing changes in data (inserts, updates, and deletes) and applying them to Iceberg tables while maintaining the data's consistency and integrity.
+- This flow will load Flight data for Nov-2024 and Dec-2024.
+- The source data is located in a **S3 bucket**.
+- The target will be the `**<user0##>_airlines**` database and it will load serveral Iceberg table.  When completed you should see the following tables have been loaded: airlines, airports, planes, and flights
+- This flow will be deployed using **Flow Designer** in a Cloudera AWS Public Cloud environment.
 
-3. **Why CDC is Important**  
-   - **Efficient updates**
-     - Capture changes as they happen and propagate them efficiently to downstream systems.
-   - **Preservation of historical data**
-     - CDC allows tracking of how data has evolved over time.
-   - **Optimized storage**
-     - Only changes are captured and propagated, optimizing storage and computation resources.
 
-## Prerequisites
-
-Before working with **Data Ingestion** and **CDC** in this module, ensure you have the following:
-
-1. **Cloud CDP Environment Setup**  
-   - Ensure your Cloud CDP Environment, PvC Data Service, or CDP Base Cluster is fully set up. This document does not cover installation.
-
-2. **Iceberg Table Setup**  
-   - You should have Iceberg tables set up with the required schema, including the `flights` and `airlines` tables used for this use case.
+1. **Open Cloudera Data Flow**  
+   - Download the flow definition [here](../../Assets/DataFlows/New_Flight_Data_to_Flights_Iceberg_Table.json).
+   - Open the **DataHub NiFi** and create a new **Process Group**.
+   - ![import_flow_definition.png](../../images/import_flow_definition.png)
    
-3. **Data Lakehouse**  
-   - Familiarity with the structure and schema of a **Data Lakehouse** powered by Iceberg.
+2. **Go to Catalog**  
+   - Browse to the JSON file on your disk. Once uploaded, you will see the following:  
+   ![process_group.png](../../images/process_group.png)
 
-4. **Access to NiFi**
+3. **Create a New Draft of Iceberg-Summit-2025-data-flow**  
+   - Double click on the Process Group to access the resulting Flow (with a few comments added to this screenshot):  
+   ![nifi_flow.png](../../images/nifi_flow.png)
 
-   Depending on the submodule you're working on, ensure you have the appropriate NiFi access:
-   
-   - **Submodule 01**
-   
-      - Requires access to **NiFi via the Flow Management Data Hub** for loading flight data.
-   
-   - **Submodules 02, 03, and 04**
-   
-      - Requires access to **NiFi via the DataFlow Data Service** for CDC simulation with Debezium, GoldenGate, and custom flows.
+### Step 2: Getting the Flow to Execute
 
-> **Note:** Iceberg may or may not be the optimal solution for fast-changing data (such as millions of updates or deletes per second). In such cases, consider alternatives like **Kudu** for high-frequency data changes.
+1. **Explore Data Flow**
+   - Open CDP > Management Console > Environments > **your-environment**.
+   - Click on the **Data Lake** tab.
+   - Open Cloudera Manager by going to the Data Lake tab and clicking on the CM URL:  
+   ![datalake_cm_url.png](../../images/datalake_cm_url.png)
 
----
+2. **Start Test Session**
+   - On the left nav, select **Clusters > Hive Metastore**:  
+   ![cm_hive_metastore_config.png](../../images/cm_hive_metastore_config.png)
+   - Click on **Actions > Download Client Configuration**:  
+   ![cm_download_hms_client_config.png](../../images/cm_download_hms_client_config.png)
 
-### Methods Covered in This Module
+3. **Modify Parameters to use your User ID**
+   - Once the client configuration is downloaded to your machine, unzip the file:  
+   ![client_config_folder.png](../../images/client_config_folder.png)
 
-#### 1. NiFi Data Ingestion and CDC Flow
+4. **Start Cotroller All Services**  
+   - Open `hive-site.xml` in a text editor and search for the key `hive.metastore.uris`.  
+   - Copy the whole string between the `<value>` and `</value>` tags. This may contain 1 or more URIs separated by commas:  
+   ![hive_metastore_uris.png](../../images/hive_metastore_uris.png)
 
-This method covers using NiFi to ingest data into Iceberg tables and simulate CDC transactions using Iceberg processors, available in a **Flow Management Data Hub**.
+5. **Start Airlines Processor and check output**
+   - Use the following command to transfer files:  
+   - Comment block for scp command:  
+   ``` bash 
+   scp <file>-site.xml <worker-pub-ip>:~
+   ```
 
-#### 2. CDC with Debezium
+6. **Start All Processors and monitor progress**  
+   - SSH into each worker node:
+   ``` bash 
+   ssh <worker-pub-ip>
+   mkdir /tmp/<prefix>
+   cp *.xml /tmp/<prefix>/
+   sudo chown -R nifi:nifi /tmp/<prefix>
+   ```
 
-This method covers how to use Debezium to simulate CDC transactions for Iceberg tables, including updates, deletes, and inserts, using the **DataFlow Data Service**.
+### Step 3: Verify Data Ingested Properly into Bronze Layer
 
-#### 3. CDC with GoldenGate
+1. **Open Cloudera Data Warehouse **  
+   - Update the following parameters in NiFi:
+     - **Access Key ID**: Your AWS access key to the CDP bucket where the new flight data (2009-2023) resides.
+     - **Secret Key ID**: Your AWS secret key to the CDP bucket where the flight data resides.
+     - **Workload User**: Your CDP workload user ID.
+     - **Workload Password**: Your CDP workload password.
+     - **Hadoop Configuration Resources**: Path to the XML files on the NiFi worker nodes, e.g., `/tmp/<prefix>/hive-site.xml,/tmp/<prefix>/core-site.xml,/tmp/<prefix>/hdfs-site.xml`.
+     - **Database**: Should be `"<prefix>_airlines"`.
+     - **Hive Metastore URI**: Use the URIs retrieved in the previous step.
+   ![update_parameter_context.png](../../images/update_parameter_context.png)
 
-This method covers how to handle CDC transactions using GoldenGate, simulating the ingestion of updates, deletes, and inserts for Iceberg tables, using the **DataFlow Data Service**.
+2. **Open SQL Editor**  
+   - Right-click the flow and select **Configure**:  
+   ![configure_flow.png](../../images/configure_flow.png)
+   - Go to the **Controller Services** tab:  
+   ![controler_svcs_tab.png](../../images/controler_svcs_tab.png)
+   - Enable all the Controller Services by clicking on the lightning bolt next to each Controller Service that has not yet been enabled:  
+   ![enable_controler_svcs.png](../../images/enable_controler_svcs.png)
 
-#### 4. Custom CDC Data Flow
+3. **Run some Queries to check results**  
+   - If you see the following message, ensure your environment in NiFi worker nodes is correctly set up:  
+   ![warning_nifi_not_setup_correctly.png](../../images/warning_nifi_not_setup_correctly.png)
 
-This method demonstrates a custom CDC data flow using Iceberg, enabling a flexible approach to ingesting CDC transactions from custom data sources, using the **DataFlow Data Service**.
 
----
 
-### Key Takeaways
 
-- CDC allows efficient and real-time data changes to be captured and applied without rewriting entire tables.
-- Iceberg tables support in-place data updates, ensuring data integrity across inserts, updates, and deletes.
-- Each method offers different levels of flexibility depending on the use case and data source (NiFi, Debezium, GoldenGate, or custom).
 
-> **Note:** Remember to replace `${prefix}` with your chosen value (e.g., your User ID) throughout the process.
 
----
 
-## Submodules
 
-Choose one of the following submodules to get started:
+Might be nice to have this be a processor that is investigated during monitoring
+### Step 7: PutIceberg Processor Configuration
 
-- `01` [NiFi Data Ingestion and CDC Flow](load_new_data_to_flights_DF.md) - **Requires Flow Management Data Hub**
-- `02` [CDC Debezium Data Flow](change_data_capture_debezium_DF.md) - **Requires DataFlow Data Service**
-- `03` [CDC GoldenGate Data Flow](change_data_capture_goldengate_DF.md) - **Requires DataFlow Data Service**
-- `04` [CDC Custom Data Flow](change_data_capture_custom_DF.md) - **Requires DataFlow Data Service**
+- **PutIceberg Processor Configuration**  
+   - This processor is used to insert records into an Iceberg table. The records are read using the configured Record Reader, and the target Iceberg table is identified by the **Catalog Namespace** and **Table Name** properties.
+   ![configure_puticeberg_processor.png](../../images/configure_puticeberg_processor.png)
+
+
+## Summary
+
+In this lab, we explored how to use **NiFi** for ingesting flight data from a public S3 bucket. You configured processors, set up controller services, and used Iceberg to manage the data. 
+
+
+## Next Steps
+
+Proceed to the next lab exercise: [CDC Debezium Data Flow](change_data_capture_debezium_DF.md).
