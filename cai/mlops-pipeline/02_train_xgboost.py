@@ -49,9 +49,9 @@ from datetime import date
 import cml.data_v1 as cmldata
 import pyspark.pandas as ps
 
-USERNAME = os.environ["PROJECT_OWNER"]
-DBNAME = "BNK_MLOPS_HOL_"+USERNAME
-CONNECTION_NAME = "go01-aw-dl"
+USERNAME = "jingalls"
+DBNAME = USERNAME+"_airlines"
+CONNECTION_NAME = "odl-aw-dl"
 
 DATE = date.today()
 EXPERIMENT_NAME = "xgb-cc-fraud-{0}".format(USERNAME)
@@ -61,25 +61,43 @@ mlflow.set_experiment(EXPERIMENT_NAME)
 conn = cmldata.get_connection(CONNECTION_NAME)
 spark = conn.get_spark_session()
 
-df_from_sql = ps.read_table('{0}.CC_TRX_{1}'.format(DBNAME, USERNAME))
-df = df_from_sql.to_pandas()
-df = df.drop(columns=["job"])
+#---------------------------------------------------
+#               ICEBERG INCREMENTAL READ
+#---------------------------------------------------
+
+# READ LATEST ICEBERG METADATA
+snapshot_id = spark.read.format("iceberg").load('spark_catalog.{}.flights_silver.snapshots'.format(DBNAME)).select("snapshot_id").tail(1)[0][0]
+committed_at = spark.read.format("iceberg").load('spark_catalog.{}.flights_silver.snapshots'.format(DBNAME, USERNAME)).select("committed_at").tail(1)[0][0].strftime('%m/%d/%Y')
+parent_id = spark.read.format("iceberg").load('spark_catalog.{}.flights_silver.snapshots'.format(DBNAME, USERNAME)).select("parent_id").tail(1)[0][0]
+
+# SET MLFLOW TAGS
+tags = {
+  "iceberg_snapshot_id": snapshot_id,
+  "iceberg_snapshot_committed_at": committed_at,
+  "iceberg_parent_id": parent_id,
+  "row_count": df.count()
+}
+
+incReadDf = spark.read\
+    .format("iceberg")\
+    .option("start-snapshot-id", parent_id)\
+    .option("end-snapshot-id", snapshot_id)\
+    .load("{}.flights_silver".format(DBNAME, USERNAME))
+
+incReadDf = incReadDf.toPandas()
+
+incReadDf = incReadDf[["month", "dayofmonth", "dayofweek", "crsdeptime", \
+                  "distance", "taxiout", "lateaircraftdelay", "diverted"]]
+
+incReadDf['diverted'] = incReadDf['diverted'].map(int)
+print(incReadDf.dtypes)
 
 test_size = 0.3
-X_train, X_test, y_train, y_test = train_test_split(df.drop("fraud_trx", axis=1), df["fraud_trx"], test_size=test_size)
+X_train, X_test, y_train, y_test = train_test_split(incReadDf.drop("diverted", axis=1), incReadDf["diverted"], test_size=test_size)
 
 with mlflow.start_run():
 
     model = XGBClassifier(use_label_encoder=False, eval_metric="logloss")
-
-    # Step 1: cambiar test_size linea 69 y recorrer
-    # Step 2: cambiar linea 74, agregar linea 97, y recorrer
-      # linea 75: model = XGBClassifier(use_label_encoder=False, max_depth=4, eval_metric="logloss")
-      # linea 97: mlflow.log_param("max_depth", 4)
-    # Step 3: cambiar linea 74 y 97, agregar linea 98, y recorrer
-      # linea 75: model = XGBClassifier(use_label_encoder=False, max_depth=2, max_leaf_nodes=5, eval_metric="logloss")
-      # linea 97: mlflow.log_param("max_depth", 2)
-      # linea 98: mlflow.log_param("max_leaf_nodes", 5)
 
     model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
     y_pred = model.predict(X_test)
@@ -92,11 +110,8 @@ with mlflow.start_run():
     mlflow.log_param("accuracy", accuracy)
     mlflow.log_param("test_size", test_size)
 
-    # Step 2:
-    # Step 3:
-
     mlflow.xgboost.log_model(model, artifact_path="artifacts")#, registered_model_name="my_xgboost_model"
-
+    mlflow.set_tags(tags)
 
 def getLatestExperimentInfo(experimentName):
     """
