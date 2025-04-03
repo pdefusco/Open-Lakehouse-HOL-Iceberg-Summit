@@ -49,7 +49,7 @@ In this lab, we will explore using **Spark** to transform data and ultimately bu
    - Create the Airflow Job Definition in the Editor.
         * Drag and drop two CDE Job instances into the Canvas.
         * Configure each instance by selecting the Silver and Gold Jobs.
-        * Run the Job
+        * Run the Job.
 
 ![alt text](../img/cde_airflow_job_1.png)
 ![alt text](../img/cde_airflow_job_2.png)
@@ -58,6 +58,7 @@ In this lab, we will explore using **Spark** to transform data and ultimately bu
    - Create the Airflow Job Definition.
         * Open the ```003_Airflow_Orch.py``` script in your local editor and add your username at line 50.
         * Create a CDE Job of type Airflow and select the Application File by uploading your edited script to a Files resource.
+        * Run the Job.
 
 ![alt text](../img/cde_airflow_job_3.png)
 ![alt text](../img/airflow_run.png)
