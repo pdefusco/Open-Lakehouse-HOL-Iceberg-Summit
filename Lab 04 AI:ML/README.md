@@ -43,7 +43,7 @@ In this lab, we will explore using **MLFlow and XGBoost** to predict diverted fl
 
 ![alt text](../img/cai_sess_3.png)
 
-![alt text](../img/cai_sess_4.png)
+![alt text](../img/cai_session_4.png)
 
 ![alt text](../img/cai_mlflow_1.png)
 
