@@ -23,6 +23,7 @@ In this lab, we will explore using **Spark** to transform data and ultimately bu
         * Apply the following Advanced Options: 1 Initial Executors / 2 Drivers Cores / 4 Executor Cores / 2 Driver Memory / 8 Executor Memory.
 
 ![alt text](../img/cde_job_def_1.png)
+
 ![alt text](../img/cde_job_def_2.png)
 
 ### Step 2: Create Gold Spark Job
@@ -39,6 +40,7 @@ In this lab, we will explore using **Spark** to transform data and ultimately bu
         * Apply the following Advanced Options: 1 Initial Executors / 2 Drivers Cores / 4 Executor Cores / 2 Driver Memory / 8 Executor Memory.
 
 ![alt text](../img/cde_gold_job_def_1.png)
+
 ![alt text](../img/cde_gold_job_def_2.png)
 
 ### Step 3: Create Airflow Job
@@ -52,6 +54,7 @@ In this lab, we will explore using **Spark** to transform data and ultimately bu
         * Run the Job.
 
 ![alt text](../img/cde_airflow_job_1.png)
+
 ![alt text](../img/cde_airflow_job_2.png)
 
 **Option B: Create Airflow Job in CDE using Airflow DAG**  
@@ -61,4 +64,5 @@ In this lab, we will explore using **Spark** to transform data and ultimately bu
         * Run the Job.
 
 ![alt text](../img/cde_airflow_job_3.png)
+
 ![alt text](../img/airflow_run.png)

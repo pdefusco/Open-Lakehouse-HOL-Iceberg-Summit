@@ -49,7 +49,7 @@ from datetime import date
 import cml.data_v1 as cmldata
 import pyspark.pandas as ps
 
-USERNAME = "jingalls"
+USERNAME = "pauldefusco"
 DBNAME = USERNAME+"_airlines"
 CONNECTION_NAME = "odl-aw-dl"
 
