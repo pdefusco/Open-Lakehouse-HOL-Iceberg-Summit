@@ -2,7 +2,7 @@
 
 ## Overview
 
-In this lab, we will explore using **Spark** to transform data and ultimately build a simplified Medallion  Data Architecture. Along the way you will learn about how Spark and Iceberg work in concert to power the Open Lakehouse.
+In this lab, we will explore using **Spark** to transform data and ultimately build a simplified Medallion Data Architecture. Along the way you will learn about how Spark and Iceberg work in concert to power the Open Lakehouse.
 
 ## Step-by-Step Guide
 
