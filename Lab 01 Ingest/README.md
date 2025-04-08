@@ -181,7 +181,7 @@ At this point you are now using Apache NiFi to build a flow.
       - Click anywhere on the row of the `CDP Password` on the 
       ![alt text](img/parameters_select_to_change_cdppw_value.png)
 
-      - On the properties page to the right, enter your assigned `user-id` in the **`Value`** box.  This example is for user098:
+      - On the properties page to the right, enter the `Workload Password` (created in **Step 2: Setup Workload Password for User**) in the **`Value`** box.  This is a sensitive field so the password will NOT be shown.
    ![alt text](img/parameters_enter_cdppw_value.png)
 
    - Click `Apply Changes` button to save your changes
