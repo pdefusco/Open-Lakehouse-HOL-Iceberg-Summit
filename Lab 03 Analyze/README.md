@@ -2,257 +2,187 @@
 
 ## Overview
 
-In this lab, we will explore using **NiFi** to ingest new data into Iceberg tables and simulate **Change Data Capture (CDC)** transactions. This process ensures that data is properly loaded into Iceberg tables and CDC transactions are accurately captured, providing real-time updates without rewriting entire datasets.
+In this lab, we will explore data using **Cloudera Data Warehouse** SQL Editor and **Cloudera DataViz** . This is how a Business Analyst can interact with data stored in Iceberg tables using charts and graphs instead of having to enter SQL statements.
 
 ## Step-by-Step Guide
 
-### Step 1: Setup
+### Step 1: Run Analytic Query & Time Travel Query
 
-- This flow will load “newer” Flight data from the years 2009-2023 (not complete 2023).
-- The source data is located in a **public S3 bucket**.
-- The target will be the `**<prefix>_airlines.flights**` Iceberg table.
-- This flow can also be deployed using **Flow Designer** as well—just follow this same approach.
+In the Lab execises you will be asked to:
+   - Write a SQL to answer a burning business question for our project.  You will do this using Apache Hive.
+   - Use the same SQL to use the Time Travel feature of Iceberg to see the data as it looked after the first data load.  You will do this using Apache Hive.
+   - Open a Dasboard to answer some other burning business questions.  The Dashboard will be sending SQL to Apache Impala to return results.
 
-> Note: At the time of writing this module, research is being conducted to acquire a Public AWS bucket for the new flights data and CSV files used to build the Data Lakehouse.
+1. **Return to Data Warehouse SQL Editor**
 
-1. **Download the Flow Definition**  
-   - Download the flow definition [here](../../Assets/DataFlows/New_Flight_Data_to_Flights_Iceberg_Table.json).
-   - Open the **DataHub NiFi** and create a new **Process Group**.
-   - ![import_flow_definition.png](../../images/import_flow_definition.png)
-   
-2. **Upload the JSON file**  
-   - Browse to the JSON file on your disk. Once uploaded, you will see the following:  
-   ![process_group.png](../../images/process_group.png)
+   a. Open SQL Editor browser tab
+   - At the top of your browser window, click on the `CDW` tab that you just opened
+   ![alt text](img/cdw_browser_tabs_select_cdw.png)
 
-3. **Access the Process Group**  
-   - Double click on the Process Group to access the resulting Flow (with a few comments added to this screenshot):  
-   ![nifi_flow.png](../../images/nifi_flow.png)
+   **OR**
 
-### Step 2: Getting the Flow to Execute
+   b. Return to Cloudera Data Warehouse and Open SQL Editor
+   - On the left navigation pane click the menu icon
+   ![alt text](img/cde_menu_9box.png)
 
-#### Prerequisite Steps
+   - You will see this in the navigation pane
+   ![alt text](img/menu_select_cdw.png)
 
-1. **Access Cloudera Manager**  
-   - Open CDP > Management Console > Environments > **your-environment**.
-   - Click on the **Data Lake** tab.
-   - Open Cloudera Manager by going to the Data Lake tab and clicking on the CM URL:  
-   ![datalake_cm_url.png](../../images/datalake_cm_url.png)
+   - Right click on `Data Warehouse`, and select `Open Link in New Tab`
+   ![alt text](img/cdw_menu_open_in_new_tab.png)
 
-2. **Download Client Configuration**  
-   - On the left nav, select **Clusters > Hive Metastore**:  
-   ![cm_hive_metastore_config.png](../../images/cm_hive_metastore_config.png)
-   - Click on **Actions > Download Client Configuration**:  
-   ![cm_download_hms_client_config.png](../../images/cm_download_hms_client_config.png)
+   - At the top of your browser window, click on the `CDW` tab that you just opened
+   ![alt text](img/cdw_browser_tabs_select_cdw.png)
 
-3. **Extract Configuration**  
-   - Once the client configuration is downloaded to your machine, unzip the file:  
-   ![client_config_folder.png](../../images/client_config_folder.png)
+   - In this example, the `user-id` is **user005**, so they are opening the SQL Editor for `odl-is` (return to Lab 1 if you are unsure which tile to use)
+   ![CDW Home Page](img/cdw_launch_sql_editor.png)
 
-4. **Find the Hive Metastore URI**  
-   - Open `hive-site.xml` in a text editor and search for the key `hive.metastore.uris`.  
-   - Copy the whole string between the `<value>` and `</value>` tags. This may contain 1 or more URIs separated by commas:  
-   ![hive_metastore_uris.png](../../images/hive_metastore_uris.png)
+   - This will open a new browser tab named `Hue - Editor`
+   ![alt text](img/hue_editor_browser_tab.png)
 
-### Step 3: Transfer XML Files to NiFi Worker Nodes
+2. **Answer the question: Which airline carrier should we partner with for this program?**
+   - Clear the previous query from the query editor by selecting the statement and deleting it
+ 
+   - Copy/paste the following into the SQL Editor
+```
+-- Which Airline Carrier should we partner with?
+SELECT 
+   uniquecarrier, 
+   AVG(depdelay) AS avg_dep_delay,
+   COUNT(CASE WHEN depdelay > 30 THEN 1 ELSE 0 END) AS num_delayed_flights
+FROM ${user_id}_airlines.flights
+LEFT OUTER JOIN ${user_id}_airlines.airlines
+   ON flights.uniquecarrier = airlines.code
+GROUP BY uniquecarrier
+ORDER BY num_delayed_flights DESC;
+```
+   ![alt text](img/sql_editor_which_airlines_to_partner_sql.png)
 
-1. **Open Command Prompt Terminal**  
-   - Use the following command to transfer files:  
-   - Comment block for scp command:  
-   ``` bash 
-   scp <file>-site.xml <worker-pub-ip>:~
-   ```
+   - Click the `Execute` button ([<img src="img/sql_editor_execute_button.png" width="15"/>](img/sql_editor_execute_button.png))
 
-2. **Access Worker Nodes via SSH**  
-   - SSH into each worker node:
-   ``` bash 
-   ssh <worker-pub-ip>
-   mkdir /tmp/<prefix>
-   cp *.xml /tmp/<prefix>/
-   sudo chown -R nifi:nifi /tmp/<prefix>
-   ```
+   - From this list it looks like there are serveral airline carriers that we could partner with for this program.  In the returned result you can see that there are 6 airlines returned.
+   ![alt text](img/sql_editor_which_airlines_to_partner_output.png)
 
-### Step 4: Modify NiFi UI Parameters
 
-1. **Modify Parameters in NiFi**  
-   - Update the following parameters in NiFi:
-     - **Access Key ID**: Your AWS access key to the CDP bucket where the new flight data (2009-2023) resides.
-     - **Secret Key ID**: Your AWS secret key to the CDP bucket where the flight data resides.
-     - **Workload User**: Your CDP workload user ID.
-     - **Workload Password**: Your CDP workload password.
-     - **Hadoop Configuration Resources**: Path to the XML files on the NiFi worker nodes, e.g., `/tmp/<prefix>/hive-site.xml,/tmp/<prefix>/core-site.xml,/tmp/<prefix>/hdfs-site.xml`.
-     - **Database**: Should be `"<prefix>_airlines"`.
-     - **Hive Metastore URI**: Use the URIs retrieved in the previous step.
-   ![update_parameter_context.png](../../images/update_parameter_context.png)
+3. **What did the data look like before this last load? - Time Travel**  
+   - History (snapshots)
+     ```
+     SELECT * FROM ${user_id}_airlines.flights.history;
+     ```
+     ![alt text](img/sql_editor_select_flights_history_sql.png)
 
-2. **Start Controller Services**  
-   - Right-click the flow and select **Configure**:  
-   ![configure_flow.png](../../images/configure_flow.png)
-   - Go to the **Controller Services** tab:  
-   ![controler_svcs_tab.png](../../images/controler_svcs_tab.png)
-   - Enable all the Controller Services by clicking on the lightning bolt next to each Controller Service that has not yet been enabled:  
-   ![enable_controler_svcs.png](../../images/enable_controler_svcs.png)
+     - Click the `Execute` button ([<img src="img/sql_editor_execute_button.png" width="15"/>](img/sql_editor_execute_button.png))
 
-3. **Check for Errors**  
-   - If you see the following message, ensure your environment in NiFi worker nodes is correctly set up:  
-   ![warning_nifi_not_setup_correctly.png](../../images/warning_nifi_not_setup_correctly.png)
+       - Capture previous snapshot - in the results under the column `flights.snapshot_id`, locate the value for the snapshot prior to the current snapshot.  This will be the value to use to do a Time Travel
+      ![alt text](img/sql_editor_select_history_output.png)
 
-### Step 5: Run the Flow
+   - Time Travel:  
+      - Clear the previous query from the query editor by selecting the statement and deleting it
+      ![alt text](img/sql_editor_delete_select_flights_history.png)
 
-- **Run all Processors**  
-  - Start all the processors in the flow. Once the data has been processed, verify the data by querying the **flights** table in **HUE**.
+      - Copy/paste the following into the SQL Editor
+        ```
+        SELECT 
+           uniquecarrier, 
+           AVG(depdelay) AS avg_dep_delay,
+           COUNT(CASE WHEN depdelay > 30 THEN 1 ELSE 0 END) AS num_delayed_flights
+        FROM ${user_id}_airlines.flights
+          FOR SYSTEM_VERSION AS OF ${snapshot_id}
+        LEFT OUTER JOIN ${user_id}_airlines.airlines
+           ON flights.uniquecarrier = airlines.code
+        GROUP BY uniquecarrier
+        ORDER BY num_delayed_flights DESC;
+        ```
+        ![alt text](img/sql_editor_time_travel_sql.png)
 
-### Step 6: ConvertRecord Processor Configuration
+        - In the `snapshot_id` prompt box copy paste the saved Snapshot from the previous step
+        ![alt text](img/sql_editor_time_travel_snapshot_id.png)
 
-- **ConvertRecord Processor**  
-   - This processor is used to convert the incoming CSV flight records for years 2009-2023 to match the Iceberg table's format, including removing unnecessary columns and converting data types as needed.
-   ![configure_convert_record_processor.png](../../images/configure_convert_record_processor.png)
+        - Click the `Execute` button ([<img src="img/sql_editor_execute_button.png" width="15"/>](img/sql_editor_execute_button.png))
 
-- **Record Reader/Writer Configuration**  
-   - **Record Reader**: CSV Reader Controller Service. Set “Schema Access Strategy” to “Use ‘Schema Text’ Property”.  
-   ![configure_csv_reader_controller_service.png](../../images/configure_csv_reader_controller_service.png)
+   - Doing the Time Travel results in only 2 carriers with results vs. 6 from the current snapshot.  This was done with a simple syntax addition `FOR SYSTEM_VERSION AS OF ...` to allow for viewing results from a previous snapshot
+   ![alt text](img/sql_editor_time_travel_output.png)
 
-   - Use this AVRO Schema for the new flights data (for more details, refer to the **Appendix** at the end of this submodule):
-   ``` json
-   {
-      "type": "record",
-      "namespace": "com.cloudera",
-      "name": "flights_new_data",
-      "fields": [
-        { "name": "year", "type": "int" },
-        { "name": "month", "type": "int" },
-        { "name": "dayofmonth", "type": "int" },
-        { "name": "dayofweek", "type": "int" },
-        { "name": "uniquecarrier", "type": "string" },
-        { "name": "tailnum", "type": ["null","string"] },
-        { "name": "flightnum", "type": ["null","int"] },
-        { "name": "origin", "type": "string" },
-        { "name": "dest", "type": "string" },
-        { "name": "crsdeptime", "type": ["null","int"] },
-        { "name": "deptime", "type": ["null","int"] },
-        { "name": "depdelay", "type": ["null","double"] },
-        { "name": "taxiout", "type": ["null","double"] },
-        { "name": "taxiin", "type": ["null","double"] },
-        { "name": "crsarrtime", "type": ["null","int"] },
-        { "name": "arrtime", "type": ["null","int"] },
-        { "name": "arrdelay", "type": ["null","double"] },
-        { "name": "cancelled", "type": "double" },
-        { "name": "cancellationcode", "type": ["null","string"] },
-        { "name": "diverted", "type": "string" },
-        { "name": "crselapsedtime", "type": ["null","double"] },
-        { "name": "actualelapsedtime", "type": ["null","double"] },
-        { "name": "airtime", "type": ["null","double"] },
-        { "name": "distance", "type": ["null","double"] },
-        { "name": "carrierdelay", "type": ["null","double"] },
-        { "name": "weatherdelay", "type": ["null","double"] },
-        { "name": "nasdelay", "type": ["null","double"] },
-        { "name": "securitydelay", "type": ["null","double"] },
-        { "name": "lateaircraftdelay", "type": ["null","double"] }
-      ]
-    }
-   ```
+### Step 2: Use Dashboard to answer questions
 
-### Step 7: PutIceberg Processor Configuration
+1. **Return to Data Warehouse**  
+   - At the top of your browser window, click on the `CDW` tab that you just opened
+   ![alt text](img/cdw_browser_tabs_select_cdw.png)
 
-- **PutIceberg Processor Configuration**  
-   - This processor is used to insert records into an Iceberg table. The records are read using the configured Record Reader, and the target Iceberg table is identified by the **Catalog Namespace** and **Table Name** properties.
-   ![configure_puticeberg_processor.png](../../images/configure_puticeberg_processor.png)
+2. **Launch Cloudera DataViz**  
+   - On the left navigation pane, select `Data Vizualization`
+   ![alt text](img/dataviz_cdw_menu_dataviz.png)
 
-- **Catalog Service**  
-   - Configure the **HiveCatalogService** using the **Hive Metastore URIs** acquired from the previous steps. The Hadoop Configuration Resources path should point to the location where the XML files were placed on the NiFi worker nodes.
-   ![configure_hivecatalog_controller_service.png](../../images/configure_hivecatalog_controller_service.png)
+   - Click the `Data VIZ` button on the row for  `odl-airlines-dataviz` to launch DataViz
+   ![alt text](img/dataviz_launch_odl_dataviz.png)
 
-### Step 8: Kerberos User Service
+   - You will see a 'What's New' page
+   ![alt text](img/dataviz_whats_new.png)
+        - Click the `GOT IT` button ([<img src="img/dataviz_got_it_button.png" width="40"/>](img/dataviz_got_it_button.png))
 
-- **Kerberos User Service Configuration**  
-   - This service is used to connect to the Hive Metastore Service by identifying the **Principal User** and **Password**. Make sure this is set correctly.
-   ![configure_kerberos_pw_user_controller_service.png](../../images/configure_kerberos_pw_user_controller_service.png)
+3. **Open `Duty Free Dashboard`**
+   - Data Visualization main page - 
+   ![alt text](img/dataviz_main_page.png)
+
+   - There are 4 areas of DataViz - HOME, SQL, VISUALS, DATA - these are the tabs at the top of the screen in the black bar to the right of the Cloudera Data Visualization banner
+
+     - HOME - this is the starting point; it shows some statistics at the top, followed by some quick access details to recent content - Queries, Connections, Datasets, and Dashboards.  Which is the default landing page
+     - SQL - allows you to manually build queries against data to perform quick discovery against the data.  Below is an example of a query that was built and Run
+     ![](img/8.png)
+
+     - VISUALS - an area for viewing/building/modifying visuals, dashboards, and applications
+     ![](img/9.png)
+
+     - DATA - interface for access to datasets (aka: metadata model) image below, connections, and the Connection Explorer
+     ![](img/10.png)
+
+   - For today's Lab we will concentrate on opening a Dashboard named `Duty Free Dashboard`.  There are many ways to open this dashboard.  Select the tile `Duty Free Dashboard` under `Overall Most Popular`
+   ![alt text](img/dataviz_open_dashboard_from_popular.png)
+
+   - This opens the `Duty Free Dashboard`
+   ![alt text](img/dataviz_duty_free_dashboard_opened.png)
+
+4. **Analyze Engine Types**
+   - For our project it would be interesting to determine if there are other factors that contribute to delayed flights.  This could help us become more proactive is sending out emails based on other details about a flight, including information on plane manufacturer, engine type, etc.
+
+   - Let's first look at Engine Type.  Hoover over the Pie Chart slice that has no words in the slice.  You can see the Engine Type is NULL, meaning this information was not available for some of the planes
+   ![alt text](img/dataviz_duty_free_dashboard_hoover_over_engine_type.png)
+
+  - It would make sense to exclude this from the Dashboard.  To do this:
+    - At the top of the Dashboard, you will see prompts that can be used to filter the dashboard
+   ![alt text](img/dataviz_duty_free_dashboard_prompts.png)
+
+  - To exclude Null values you can select the down arrow next to **(All)** under `Engine Type` prompt, then select the option for `Include NULLs` to toggle it off.  This will exclude Null Engine Types
+  ![alt text](img/dataviz_duty_free_dashboard_ex_nulls.png)
+
+   - After exlcuding Nulls all dashboard visualizations are updating reflecting the selection
+   ![alt text](img/dataviz_duty_free_dashboard_after_ex_nulls.png)
+
+5. **Analyze Originating Airport (where did the flight start)**
+
+   - One of the airports that we are planning to partner with is Chicago O'Hare (airport code ORD).
+     - Use the Origin prompt to select `ORD`
+     - First: select the down arrow next to the **(All)** under the Origin prompt
+     - Second: enter your search term, in this case enter `ord` then click on the magnifying glass icon
+     - Third: Select `ORD` in the returned results
+       - This is a multi-select, so you could continue to choose additional airports by entering in a new search or scrolling through the list to select other airports
+   ![alt text](img/dataviz_duty_free_dashboard_origin_prompt.png)
+
+
+   - After selecting `ORD` the dashboard is updated to show results where the flight started in Chicago O'Hare.
+
+   ![alt text](img/dataviz_duty_free_dashboard_after_select_ord.png)
+
+   - Important Note: each time you select/change a prompt it is sending a query to Apache Impala and executing the query against the Iceberg tables you have previously been working on.  This is important as it shows the performance of the query engine leveraging Apache Iceberg tables.
+
+   - We could continue the analysis to determine when it would be best to send an offer to our Duty Free store based on various factors.
+
+6. **[Time Permitting] Explore other Prompts, Visuals, etc.**
+   - Feel free to spend a little time navigating around in the Dashboard by applying different fliters like changing the slider `Distance` prompt or hoovering over other visuals like the `Correlation Code by Manufacturer`
+   ![alt text](img/dataviz_duty_free_dashboard_distance_prompt_slide.png)
+   ![alt text](img/dataviz_duty_free_dashboard_hoover_correlation.png)
 
 ## Summary
 
-In this submodule, we explored how to use **NiFi** for ingesting flight data from a public S3 bucket and simulate **Change Data Capture (CDC)**. We configured processors, set up controller services, and used Iceberg to manage the data. 
+In this Lab, we explored how to use **Cloudera Data Warehouse (Hive/Impala)** for querying flight data to answer burning business questions and for taking advantage of one of the superpowers of Apache Iceberg, Time Travel.
 
-## Appendix
-
-**Formatted AVRO Schema for incoming CSV Flights data:**
-``` json
-    {
-      "type": "record",
-      "namespace": "com.cloudera",
-      "name": "flights_new_data",
-      "fields": [
-        { "name": "year", "type": "int" },
-        { "name": "month", "type": "int" },
-        { "name": "dayofmonth", "type": "int" },
-        { "name": "dayofweek", "type": "int" },
-        { "name": "uniquecarrier", "type": "string" },
-        { "name": "tailnum", "type": ["null","string"] },
-        { "name": "flightnum", "type": ["null","int"] },
-        { "name": "origin", "type": "string" },
-        { "name": "dest", "type": "string" },
-        { "name": "crsdeptime", "type": ["null","int"] },
-        { "name": "deptime", "type": ["null","int"] },
-        { "name": "depdelay", "type": ["null","double"] },
-        { "name": "taxiout", "type": ["null","double"] },
-        { "name": "taxiin", "type": ["null","double"] },
-        { "name": "crsarrtime", "type": ["null","int"] },
-        { "name": "arrtime", "type": ["null","int"] },
-        { "name": "arrdelay", "type": ["null","double"] },
-        { "name": "cancelled", "type": "double" },
-        { "name": "cancellationcode", "type": ["null","string"] },
-        { "name": "diverted", "type": "string" },
-        { "name": "crselapsedtime", "type": ["null","double"] },
-        { "name": "actualelapsedtime", "type": ["null","double"] },
-        { "name": "airtime", "type": ["null","double"] },
-        { "name": "distance", "type": ["null","double"] },
-        { "name": "carrierdelay", "type": ["null","double"] },
-        { "name": "weatherdelay", "type": ["null","double"] },
-        { "name": "nasdelay", "type": ["null","double"] },
-        { "name": "securitydelay", "type": ["null","double"] },
-        { "name": "lateaircraftdelay", "type": ["null","double"] }
-      ]
-    }
-```
-
-**Formatted AVRO Schema for Iceberg table:**
-``` json
-    {
-      "type": "record",
-      "namespace": "com.cloudera",
-      "name": "flights_new_data",
-      "fields": [
-        { "name": "month", "type": "int" },
-        { "name": "dayofmonth", "type": "int" },
-        { "name": "dayofweek", "type": "int" },
-        { "name": "deptime", "type": ["null","int"] },
-        { "name": "crsdeptime", "type": ["null","int"] },
-        { "name": "arrtime", "type": ["null","int"] },
-        { "name": "crsarrtime", "type": ["null","int"] },
-        { "name": "uniquecarrier", "type": "string" },
-        { "name": "flightnum", "type": ["null","int"] },
-        { "name": "tailnum", "type": ["null","string"] },
-        { "name": "actualelapsedtime", "type": ["null","int"] },
-        { "name": "crselapsedtime", "type": ["null","int"] },
-        { "name": "airtime", "type": ["null","int"] },
-        { "name": "arrdelay", "type": ["null","int"] },
-        { "name": "depdelay", "type": ["null","int"] },
-        { "name": "origin", "type": "string" },
-        { "name": "dest", "type": "string" },
-        { "name": "distance", "type": ["null","int"] },
-        { "name": "taxiin", "type": ["null","int"] },
-        { "name": "taxiout", "type": ["null","int"] },
-        { "name": "cancelled", "type": "int" },
-        { "name": "cancellationcode", "type": ["null","string"] },
-        { "name": "diverted", "type": "string" },
-        { "name": "carrierdelay", "type": ["null","int"] },
-        { "name": "weatherdelay", "type": ["null","int"] },
-        { "name": "nasdelay", "type": ["null","int"] },
-        { "name": "securitydelay", "type": ["null","int"] },
-        { "name": "lateaircraftdelay", "type": ["null","int"] },
-        { "name": "year", "type": "int" }
-      ]
-    }
-```
-
-## Next Steps
-
-Proceed to the next submodule: [CDC Debezium Data Flow](change_data_capture_debezium_DF.md).
